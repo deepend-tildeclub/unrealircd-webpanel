@@ -27,6 +27,11 @@ class CheckUp
 		"other" => [],
 	];
 
+	// Keep the existing problem arrays as unresolved issues for compatibility.
+	public array $issue_details = [];
+	public array $all_issues = [];
+	public array $accepted_issues = [];
+	public int $accepted_current_count = 0;
 	public $serverlist = [];
 
 	/**
@@ -41,7 +46,52 @@ class CheckUp
 		$this->usermode_check();
 		$this->module_check();
 		$this->server_check();
-			
+		$this->applyAcceptances();
+	}
+
+	/** A stable ID for this exact warning, including its direction and server names. */
+	public static function issueId(string $category, string $message): string
+	{
+		// HTML presentation changes should not invalidate previously accepted warnings.
+		$plain = html_entity_decode(strip_tags($message), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+		$plain = trim(preg_replace('/\s+/u', ' ', $plain) ?? $plain);
+		return hash('sha256', $category."\0".$plain);
+	}
+
+	/** Partition warnings without changing how the underlying checks are performed. */
+	public function applyAcceptances(): void
+	{
+		$saved = get_config('health_check_accepted');
+		$this->accepted_issues = is_array($saved) ? $saved : [];
+		$this->all_issues = [];
+		$this->issue_details = [];
+		$this->accepted_current_count = 0;
+
+		foreach ($this->problems as $category => $messages)
+		{
+			$unresolved = [];
+			$this->issue_details[$category] = [];
+			foreach ($messages as $message)
+			{
+				$id = self::issueId($category, $message);
+				$issue = [
+					'id' => $id,
+					'category' => $category,
+					'message' => $message,
+					'summary' => trim(html_entity_decode(strip_tags($message), ENT_QUOTES | ENT_HTML5, 'UTF-8')),
+				];
+				$this->all_issues[$id] = $issue;
+				if (isset($this->accepted_issues[$id]) && is_array($this->accepted_issues[$id]))
+				{
+					++$this->accepted_current_count;
+					continue;
+				}
+				$unresolved[] = $message;
+				$this->issue_details[$category][] = $issue;
+			}
+			$this->problems[$category] = $unresolved;
+			$this->num_of_problems[$category] = count($unresolved);
+		}
 	}
 
 	public function total()
@@ -260,7 +310,8 @@ class CheckUp
 		<a style="width:fit-content" id="health_banner" class="card alert text-dark alert-'.(!$this->total() ? "success" : "danger").'" role="alert" href="'.get_config("base_url").'tools/checkup.php">
 			<i class="fa-solid fa-heart-pulse fa-2x" style="position:absolute;top:10px;left:10px"></i>
 			<h4 class="alert-heading mt-0 mb-0" style="padding-left:40px;">Network Health </h4><span style="position:relative;top:5px;" class="ml-3 badge badge-'.$this->badgestyle().'">'.$this->equivalate().'</span>
-			<p class="ml-4 mt-2 mb-0">Found <b>'.$this->total().'</b> problems in total.</p>
+			<p class="ml-4 mt-2 mb-0">Found <b>'.$this->total().'</b> unresolved problems.'.
+				($this->accepted_current_count ? ' <small>('.$this->accepted_current_count.' accepted as intended)</small>' : '').'</p>
 	</a>';
 	}
 
@@ -272,6 +323,37 @@ class CheckUp
 			echo "\t<tr><td>$value</td></tr>\n";
 		}
 		echo "</table>\n";
+	}
+
+	/** Render checkup-only controls; other callers can keep using toTable(). */
+	public function toManageTable(string $category, bool $canManage): void
+	{
+		$items = $this->issue_details[$category] ?? [];
+		if ($items === [])
+		{
+			echo '<p class="text-muted">No unresolved conflicts.</p>';
+			return;
+		}
+		echo '<table class="table table-striped"><tbody>';
+		foreach ($items as $issue)
+		{
+			echo '<tr><td>'.$issue['message'].'</td>';
+			if ($canManage)
+			{
+				$id = htmlspecialchars($issue['id'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+				$csrf = htmlspecialchars(panel_csrf_token(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+				echo '<td><form method="post" class="form-inline">'
+					.'<input type="hidden" name="_csrf" value="'.$csrf.'">'
+					.'<input type="hidden" name="checkup_action" value="accept">'
+					.'<input type="hidden" name="issue_id" value="'.$id.'">'
+					.'<input type="text" name="reason" maxlength="500" class="form-control form-control-sm mr-2" '
+					.'aria-label="Reason for accepting this warning" placeholder="Reason (optional)">'
+					.'<button type="submit" class="btn btn-sm btn-outline-secondary">Accept as intended</button>'
+					.'</form></td>';
+			}
+			echo '</tr>';
+		}
+		echo '</tbody></table>';
 	}
 }
 
