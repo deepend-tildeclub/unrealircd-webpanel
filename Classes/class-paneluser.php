@@ -29,6 +29,8 @@ define('PERMISSION_SPAMFILTER_DEL', 'sf_del');
 define('PERMISSION_REHASH', 'rhs');
 /** Can install and uninstall plugins */
 define('PERMISSION_MANAGE_PLUGINS', 'mng_plg');
+/** Can accept and reopen network health checkup warnings */
+define('PERMISSION_MANAGE_HEALTH', 'manage_health');
 /**
  * PanelUser
  * This is the User class for the SQL_Auth plugin
@@ -387,6 +389,7 @@ function get_panel_user_permission_list()
 	$list = [
 		"Can add/delete/edit Admin Panel users" => PERMISSION_MANAGE_USERS,
 		"Can add/delete/manage plugins" => PERMISSION_MANAGE_PLUGINS,
+		"Can accept/reopen network health checkup warnings" => PERMISSION_MANAGE_HEALTH,
 		"Can ban/kill IRC users" => PERMISSION_BAN_USERS,
 		"Can change properties of a user, i.e. vhost, modes and more" => PERMISSION_EDIT_USER,
 		"Can change properties of a channel, i.e. topic, modes and more" => PERMISSION_EDIT_CHANNEL,
