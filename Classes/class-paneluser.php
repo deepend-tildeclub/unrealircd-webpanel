@@ -47,10 +47,10 @@ class PanelUser
 
 	/**
 	 * Find a user in the database by name or ID
-	 * @param string $name
-	 * @param mixed $id
+	 * @param string|null $name
+	 * @param int|null $id
 	 */
-	function __construct(string $name = NULL, int $id = NULL)
+	function __construct(?string $name = null, ?int $id = null)
 	{
 		$user["name"] = $name;
 		$user["id"] = $id;
